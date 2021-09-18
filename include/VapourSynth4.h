@@ -485,4 +485,8 @@ struct VSAPI {
 
 VS_API(const VSAPI *) getVapourSynthAPI(int version) VS_NOEXCEPT;
 
+#ifdef VS_USE_MIMALLOC
+#   include <mimalloc-new-delete.h>
+#endif
+
 #endif /* VAPOURSYNTH4_H */
