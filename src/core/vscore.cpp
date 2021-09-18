@@ -184,7 +184,7 @@ MemoryUse::MemoryUse() : used(0), freeOnZero(false) {
 ///////////////
 
 VSPlaneData::VSPlaneData(size_t dataSize, MemoryUse &mem) noexcept : refcount(1), mem(mem), size(dataSize + 2 * VSFrame::guardSpace) {
-    data = vsh_aligned_malloc<uint8_t>(size + 2 * VSFrame::guardSpace, VSFrame::alignment);
+    data = internal_aligned_malloc<uint8_t>(size + 2 * VSFrame::guardSpace, VSFrame::alignment);
     assert(data);
     if (!data)
         VS_FATAL_ERROR("Failed to allocate memory for plane. Out of memory.");
@@ -199,7 +199,7 @@ VSPlaneData::VSPlaneData(size_t dataSize, MemoryUse &mem) noexcept : refcount(1)
 }
 
 VSPlaneData::VSPlaneData(const VSPlaneData &d) noexcept : refcount(1), mem(d.mem), size(d.size) {
-    data = vsh_aligned_malloc<uint8_t>(size, VSFrame::alignment);
+    data = internal_aligned_malloc<uint8_t>(size, VSFrame::alignment);
     assert(data);
     if (!data)
         VS_FATAL_ERROR("Failed to allocate memory for plane in copy constructor. Out of memory.");
@@ -209,7 +209,7 @@ VSPlaneData::VSPlaneData(const VSPlaneData &d) noexcept : refcount(1), mem(d.mem
 }
 
 VSPlaneData::~VSPlaneData() {
-    vsh_aligned_free(data);
+    internal_aligned_free(data);
     mem.subtract(size);
 }
 
