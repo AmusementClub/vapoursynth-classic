@@ -353,14 +353,14 @@ void VSThreadPool::startInternalRequest(const PVSFrameContext &notify, NodeOutpu
     if (key.second < 0)
         core->logFatal("Negative frame request by: " + notify->key.first->getName());
 
-    // fallback for rpAutoFallback
+    // fallback
     if (notify->key.second != key.second) {
         auto node = notify->key.first;
         auto source = key.first;
         for (auto& dependency : node->dependencies) {
             if (dependency.source == source) {
-                if (dependency.requestPattern == rpAutoFallback) {
-                    dependency.requestPattern = rpGeneral;
+                if (dependency.requestPattern) {
+                    dependency.requestPattern = 0;
                     source->registerCache(true);
                 }
                 break;
