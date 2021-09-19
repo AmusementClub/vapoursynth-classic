@@ -713,7 +713,7 @@ class vszimg {
                 std::shared_ptr<graph_data> graph_b = get_graph_data(src_format_b, dst_format_b);
 
                 std::unique_ptr<void, decltype(&internal_aligned_free)> tmp{
-                    internal_aligned_malloc(std::max(graph_t->graph.get_tmp_size(), graph_b->graph.get_tmp_size()), 64),
+                    internal_aligned_malloc<void>(std::max(graph_t->graph.get_tmp_size(), graph_b->graph.get_tmp_size()), 64),
                     internal_aligned_free
                 };
                 if (!tmp)
@@ -733,7 +733,7 @@ class vszimg {
                 std::shared_ptr<graph_data> graph = get_graph_data(src_format, dst_format);
 
                 std::unique_ptr<void, decltype(&internal_aligned_free)> tmp{
-                    internal_aligned_malloc(graph->graph.get_tmp_size(), 64),
+                    internal_aligned_malloc<void>(graph->graph.get_tmp_size(), 64),
                     internal_aligned_free
                 };
                 if (!tmp)
