@@ -93,7 +93,7 @@
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>mimalloc-override.lib;vsscript.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>mimalloc-static.lib;vsscript.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SubSystem>Console</SubSystem>
       <LargeAddressAware>true</LargeAddressAware>
       <ForceSymbolReferences>_mi_version</ForceSymbolReferences>
@@ -110,7 +110,7 @@
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>mimalloc-override.lib;vsscript.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>mimalloc-static.lib;vsscript.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SubSystem>Console</SubSystem>
       <ForceSymbolReferences>mi_version</ForceSymbolReferences>
     </Link>
@@ -132,7 +132,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>mimalloc-override.lib;vsscript.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>mimalloc-static.lib;vsscript.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SubSystem>Console</SubSystem>
       <LargeAddressAware>true</LargeAddressAware>
       <ForceSymbolReferences>_mi_version</ForceSymbolReferences>
@@ -154,7 +154,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>mimalloc-override.lib;vsscript.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>mimalloc-static.lib;vsscript.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SubSystem>Console</SubSystem>
       <ForceSymbolReferences>mi_version</ForceSymbolReferences>
     </Link>
