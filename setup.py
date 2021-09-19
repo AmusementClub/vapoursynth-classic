@@ -76,22 +76,8 @@ if is_win:
 
     # Make sure the setup process copies the VapourSynth.dll into the site-package folder
     print("Found VapourSynth.dll at:", dll_path)
-
-    for path in library_dirs:
-        mimalloc_override_path = join(path, "mimalloc-override.dll")
-        if exists(mimalloc_override_path):
-            break
-    else:
-        raise OSError("Couldn't detect vapoursynth installation path")
-
-    for path in library_dirs:
-        mimalloc_redirect_path = join(path, "mimalloc-redirect.dll" if is_64 else "mimalloc-redirect32.dll")
-        if exists(mimalloc_redirect_path):
-            break
-    else:
-        raise OSError("Couldn't detect vapoursynth installation path")
     
-    extra_data["data_files"] = [(r"Lib\site-packages", [dll_path, mimalloc_override_path, mimalloc_redirect_path])]
+    extra_data["data_files"] = [(r"Lib\site-packages", [dll_path])]
         
         
 setup(
