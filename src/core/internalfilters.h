@@ -39,7 +39,7 @@ void VS_CC resizeInitialize(VSPlugin *plugin, const VSPLUGINAPI *vspapi);
 #include <mimalloc.h>
 template<typename T>
 static inline T *internal_aligned_malloc(size_t size, size_t alignment) {
-    return static<T*>(mi_malloc_aligned(size, alignment));
+    return static_cast<T*>(mi_malloc_aligned(size, alignment));
 }
 
 static inline void internal_aligned_free(void *ptr) {
