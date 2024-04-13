@@ -1,0 +1,16 @@
+[submodule "vsrepo"]
+	path = vsrepo
+	url = https://github.com/vapoursynth/vsrepo
+[submodule "zimg"]
+	path = zimg
+	url = https://github.com/sekrit-twc/zimg
+	branch = v3.0
+[submodule "AviSynthPlus"]
+	path = AviSynthPlus
+	url = https://github.com/AviSynth/AviSynthPlus.git
+[submodule "libp2p"]
+	path = libp2p
+	url = https://github.com/sekrit-twc/libp2p.git
+[submodule "mimalloc"]
+	path = mimalloc
+	url = https://github.com/microsoft/mimalloc
