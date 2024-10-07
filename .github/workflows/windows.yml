@@ -23,10 +23,10 @@ jobs:
             test: true
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Add msbuild to PATH
-      uses: microsoft/setup-msbuild@v1
+      uses: microsoft/setup-msbuild@v2
 
     - name: Clone Dependencies
       shell: bash
@@ -56,7 +56,7 @@ jobs:
         cd ..
 
     - name: Setup Python 3.8
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         # Version range or exact version of a Python version to use, using SemVer's version range syntax.
         python-version: 3.8
@@ -71,7 +71,7 @@ jobs:
         echo "PYTHON38_DIR=$pythonLocation" >> $GITHUB_ENV
 
     - name: Setup Python 3.9
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: 3.9
         architecture: ${{ matrix.arch }}
@@ -93,7 +93,7 @@ jobs:
         (Get-Content -Path "msvc_project\VSScript\VSScript.vcxproj" -Raw) -replace "C:\\Program Files\\Python39\\include",$py_include_path | Set-Content "msvc_project\VSScript\VSScript.vcxproj"
 
     - name: Setup Python 3.10
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.10'
         architecture: ${{ matrix.arch }}
@@ -106,7 +106,7 @@ jobs:
         echo "PYTHON310_DIR=$pythonLocation" >> $GITHUB_ENV
 
     - name: Setup Python 3.11
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.11'
         architecture: ${{ matrix.arch }}
@@ -119,7 +119,7 @@ jobs:
         echo "PYTHON311_DIR=$pythonLocation" >> $GITHUB_ENV
 
     - name: Setup Python 3.12
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.12'
         architecture: ${{ matrix.arch }}
@@ -132,7 +132,7 @@ jobs:
         echo "PYTHON312_DIR=$pythonLocation" >> $GITHUB_ENV
 
     - name: Setup Python 3.13
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.13-dev'
         architecture: ${{ matrix.arch }}
@@ -201,7 +201,7 @@ jobs:
         mv ../*.7z .
         mv installer/buildp$bits upload
     - name: Upload build artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: build-${{matrix.arch}}
         if-no-files-found: error
