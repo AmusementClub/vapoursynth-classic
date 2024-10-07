@@ -5,7 +5,7 @@ on: [push, pull_request, workflow_dispatch]
 jobs:
   build-msvc:
     runs-on: windows-2019
-    
+
     strategy:
       matrix:
         #arch: [x86, x64]
@@ -27,7 +27,7 @@ jobs:
 
     - name: Add msbuild to PATH
       uses: microsoft/setup-msbuild@v1
-  
+
     - name: Clone Dependencies
       shell: bash
       run: |
@@ -131,9 +131,25 @@ jobs:
         py -3.12-${{ matrix.bits }} -m pip install cython setuptools wheel
         echo "PYTHON312_DIR=$pythonLocation" >> $GITHUB_ENV
 
+    - name: Setup Python 3.13
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.13-dev'
+        architecture: ${{ matrix.arch }}
+
+    - name: Install Python 3.13 cython and Save Path
+      shell: bash
+      run: |
+        py -3.13-${{ matrix.bits }} -m pip install --upgrade pip
+        py -3.13-${{ matrix.bits }} -m pip install cython setuptools wheel
+        echo "PYTHON313_DIR=$pythonLocation" >> $GITHUB_ENV
+
     - name: Compile VS
       run: |
-        msbuild msvc_project/VapourSynth.sln /t:Build /p:Configuration=Release /p:Platform=${{ matrix.platform }}        
+        msbuild msvc_project/VapourSynth.sln /t:Build /p:Configuration=Release /p:Platform=${{ matrix.platform }}
+    - name: Build Python 3.13 plugin
+      run: |
+        py -3.13-${{ matrix.bits }} -m pip install . --no-deps -v
     - name: Build Python 3.12 plugin
       run: |
         py -3.12-${{ matrix.bits }} -m pip install . --no-deps -v
@@ -155,12 +171,13 @@ jobs:
         $env:SKIP_COMPRESS="no"
         $env:SKIP_WAIT="yes"
         & ".\make portable.bat"
-        
+
         if ("${{ matrix.arch }}" -eq "x64") {
           pushd buildp64
         } else {
           pushd buildp32
         }
+        py -3.13-${{ matrix.bits }} -m pip install . --no-deps -v
         py -3.12-${{ matrix.bits }} -m pip install . --no-deps -v
         py -3.11-${{ matrix.bits }} -m pip install . --no-deps -v
         py -3.10-${{ matrix.bits }} -m pip install . --no-deps -v
@@ -174,6 +191,7 @@ jobs:
       run: |
         bits=${{ matrix.bits }}
         arch=${{ matrix.arch }}
+        cp "$PYTHON313_DIR"/Lib/site-packages/vapoursynth*.pyd installer/buildp$bits
         cp "$PYTHON312_DIR"/Lib/site-packages/vapoursynth*.pyd installer/buildp$bits
         cp "$PYTHON311_DIR"/Lib/site-packages/vapoursynth*.pyd installer/buildp$bits
         cp "$PYTHON310_DIR"/Lib/site-packages/vapoursynth*.pyd installer/buildp$bits
@@ -189,6 +207,9 @@ jobs:
         if-no-files-found: error
         path: build.7z
 
+    - name: Run test for Python 3.13
+      if: ${{ matrix.test }}
+      run: py -3.13-${{ matrix.bits }} -m unittest discover -s test -p "*test.py"
     - name: Run test for Python 3.12
       if: ${{ matrix.test }}
       run: py -3.12-${{ matrix.bits }} -m unittest discover -s test -p "*test.py"
