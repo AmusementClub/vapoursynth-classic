@@ -4,7 +4,7 @@ on: [push, pull_request, workflow_dispatch]
 
 jobs:
   build-gcc:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     env:
       CC: ${{ matrix.cc }}
@@ -13,20 +13,14 @@ jobs:
     strategy:
       matrix:
         include:
-          - cc: gcc-10
-            cxx: g++-10
-          - cc: gcc-11
-            cxx: g++-11
+          - cc: gcc-13
+            cxx: g++-13
+          - cc: gcc-14
+            cxx: g++-14
       fail-fast: false
 
     steps:
-    - uses: actions/checkout@v3
-
-    - name: Install GCC 11
-      if: ${{ matrix.cc == 'gcc-11' }}
-      run: |
-        sudo apt-get update
-        sudo apt-get install g++-11 -y
+    - uses: actions/checkout@v4
 
     - name: Print compiler version
       run: ${{ env.CC }} --version
@@ -43,15 +37,15 @@ jobs:
         rm -rf zimg
 
     - name: Setup Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         # Version range or exact version of a Python version to use, using SemVer's version range syntax.
-        python-version: 3.9
+        python-version: 3.12
 
     - name: Install cython
       run: |
         python -m pip install --upgrade pip
-        pip install cython
+        pip install cython setuptools wheel
 
     - name: Set PKG_CONFIG_PATH
       run: echo "PKG_CONFIG_PATH=$pythonLocation/lib/pkgconfig" >> $GITHUB_ENV
