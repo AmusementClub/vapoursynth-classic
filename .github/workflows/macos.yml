@@ -11,7 +11,7 @@ jobs:
       CXX: clang++
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Print compiler version
       run: ${{ env.CC }} --version
@@ -19,7 +19,7 @@ jobs:
     - name: Install autotools
       run: |
         brew update
-        brew install automake autoconf libtool pkg-config
+        brew install automake autoconf libtool pkg-config llvm
 
     - name: Install zimg
       run: |
@@ -33,7 +33,7 @@ jobs:
         rm -rf zimg
 
     - name: Setup Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         # Version range or exact version of a Python version to use, using SemVer's version range syntax.
         python-version: 3.9
@@ -48,12 +48,10 @@ jobs:
 
     - name: configure
       run: |
+        export CC=/opt/homebrew/opt/llvm/bin/clang
+        export CXX=/opt/homebrew/opt/llvm/bin/clang++
         ./autogen.sh
-        # somehow newer macOS imagemagick requires -fopenmp to build?
-        ./configure --disable-imwri
-
-    - name: make
-      run: make -j3
+        ./configure
 
     - name: make install
       run: |
@@ -62,3 +60,5 @@ jobs:
 
     - name: Run test
       run: python -m unittest discover -s test -p "*test.py"
+
+    
