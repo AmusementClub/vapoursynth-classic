@@ -268,7 +268,7 @@ jobs:
         done
 
     - name: Upload release artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: release-${{matrix.arch}}
         if-no-files-found: error
