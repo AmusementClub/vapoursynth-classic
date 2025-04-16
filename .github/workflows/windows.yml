@@ -4,7 +4,7 @@ on: [push, pull_request, workflow_dispatch]
 
 jobs:
   build-msvc:
-    runs-on: windows-2019
+    runs-on: windows-2025
 
     strategy:
       matrix:
