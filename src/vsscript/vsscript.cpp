@@ -355,6 +355,7 @@ extern "C" FARPROC WINAPI delayload_hook(unsigned reason, DelayLoadInfo* info) {
     case dliNotePreLoadLibrary: {
         //std::cerr << "loading " << info->szDll << std::endl;
         const std::vector<std::wstring> pythonDllNames {
+            L"python313.dll",
             L"python312.dll",
             L"python311.dll",
             L"python310.dll",
