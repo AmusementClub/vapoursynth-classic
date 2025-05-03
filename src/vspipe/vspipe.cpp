@@ -170,8 +170,13 @@ struct VSPipeOutputData {
 
     /* Timecode output */
     FILE *timecodesFile = nullptr;
-    int64_t currentTimecodeNum = 0;
-    int64_t currentTimecodeDen = 1;
+    std::map<std::pair<int64_t, int64_t>, int64_t> currentTimecode;
+    double getCurrentTimecode() {        
+        double sum = 0;
+        for (const auto &iter : currentTimecode)
+            sum += iter.second * (static_cast<double>(iter.first.first) / iter.first.second);
+        return sum;
+    }
 
     /* JSON output */
     FILE *jsonFile = nullptr;
@@ -372,7 +377,7 @@ static void VS_CC frameDoneCallback(void *userData, const VSFrame *f, int n, VSN
                     std::ostringstream stream;
                     stream.imbue(std::locale("C"));
                     stream.setf(std::ios::fixed, std::ios::floatfield);
-                    stream << (data->currentTimecodeNum * 1000 / static_cast<double>(data->currentTimecodeDen));
+                    stream << (data->getCurrentTimecode() * 1000);
                     if (fprintf(data->timecodesFile, "%s\n", stream.str().c_str()) < 0) {
                         if (data->errorMessage.empty())
                             data->errorMessage = "Error: failed to write timecode for frame " + std::to_string(data->outputFrames) + ". errno: " + std::to_string(errno);
@@ -384,19 +389,21 @@ static void VS_CC frameDoneCallback(void *userData, const VSFrame *f, int n, VSN
                         int64_t duration_num = data->vsapi->mapGetInt(props, "_DurationNum", 0, &err_num);
                         int64_t duration_den = data->vsapi->mapGetInt(props, "_DurationDen", 0, &err_den);
 
-                        if (err_num || err_den || !duration_den) {
+                        if (err_num || err_den || duration_den <= 0 || duration_num <= 0) {
                             if (data->errorMessage.empty()) {
                                 if (err_num || err_den)
                                     data->errorMessage = "Error: missing duration at frame ";
-                                else if (!duration_den)
-                                    data->errorMessage = "Error: duration denominator is zero at frame ";
+                                else if (duration_num <= 0)
+                                    data->errorMessage = "Error: duration numerator is zero or negative at frame ";
+                                else if (duration_den <= 0)
+                                    data->errorMessage = "Error: duration denominator is zero or negative at frame ";
                                 data->errorMessage += std::to_string(data->outputFrames);
                             }
 
                             data->totalFrames = data->requestedFrames;
                             data->outputError = true;
                         } else {
-                            addRational(&data->currentTimecodeNum, &data->currentTimecodeDen, duration_num, duration_den);
+                            ++data->currentTimecode[std::make_pair(duration_num, duration_den)];
                         }
                     }
                 }
@@ -710,6 +717,8 @@ static void printHelp() {
         "    vspipe --info script.vpy\n"
         "  Write to stdout:\n"
         "    vspipe [options] script.vpy -\n"
+        "  Write to a named pipe:\n"
+        "    vspipe [options] script.vpy \"\\\\.\\pipe\\<pipename>\n"
         "  Request all frames but don't output them:\n"
         "    vspipe [options] script.vpy .\n"
         "  Write frames 5-100 to file:\n"
@@ -963,6 +972,30 @@ int main(int argc, char **argv) {
         outFile = stdout;
     } else if (opts.outputFilename == NSTRING(".")) {
         // do nothing
+#ifdef _WIN32
+    } else if (opts.outputFilename.u8string().substr(0, 9) == "\\\\.\\pipe\\") {
+        std::string pipename = opts.outputFilename.u8string().substr(9);
+        if (pipename.empty()) {
+            fprintf(stderr, "Pipe name can't be empty\n");
+            return 1;
+        }
+
+        HANDLE outFile2 = CreateNamedPipeW(opts.outputFilename.c_str(), PIPE_ACCESS_OUTBOUND, PIPE_TYPE_BYTE | PIPE_WAIT | PIPE_ACCEPT_REMOTE_CLIENTS, PIPE_UNLIMITED_INSTANCES, 1024 * 1024, 0, 0, nullptr);
+        if (outFile2 == INVALID_HANDLE_VALUE) {
+            fprintf(stderr, "Failed to create pipe \"%s\"\n", pipename.c_str());
+            return 1;
+        }
+
+        fprintf(stderr, "Waiting for client to connect to named pipe...");
+        if (ConnectNamedPipe(outFile2, nullptr) ? true : (GetLastError() == ERROR_PIPE_CONNECTED)) {
+            fprintf(stderr, "Client connected to named pipe");
+        } else {
+            fprintf(stderr, "Client failed to connect to pipe, error code: %d", static_cast<int>(GetLastError()));
+            return 1;
+        }
+
+        outFile = _fdopen(_open_osfhandle(reinterpret_cast<intptr_t>(outFile2), 0), "wb");
+#endif
     } else {
 #ifdef VS_TARGET_OS_WINDOWS
         outFile = _wfopen(opts.outputFilename.c_str(), L"wb");
