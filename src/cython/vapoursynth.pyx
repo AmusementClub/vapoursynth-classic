@@ -930,6 +930,9 @@ cdef class VideoFormat(object):
             return False
         return other.id == self.id
 
+    def __hash__(self):
+        return hash(self.id)
+
     def __int__(self):
         return self.id
 
