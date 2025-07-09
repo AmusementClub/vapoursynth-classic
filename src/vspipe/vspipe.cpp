@@ -973,8 +973,8 @@ int main(int argc, char **argv) {
     } else if (opts.outputFilename == NSTRING(".")) {
         // do nothing
 #ifdef _WIN32
-    } else if (opts.outputFilename.u8string().substr(0, 9) == "\\\\.\\pipe\\") {
-        std::string pipename = opts.outputFilename.u8string().substr(9);
+    } else if (nstringToUtf8(opts.outputFilename).substr(0, 9) == "\\\\.\\pipe\\") {
+        std::string pipename = nstringToUtf8(opts.outputFilename).substr(9);
         if (pipename.empty()) {
             fprintf(stderr, "Pipe name can't be empty\n");
             return 1;
