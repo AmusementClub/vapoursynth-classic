@@ -27,8 +27,8 @@ jobs:
         pushd zimg
         ./autogen.sh
         ./configure
-        make -j3
-        sudo make install -j3
+        make -j$(sysctl -n hw.logicalcpu)
+        sudo make install -j$(sysctl -n hw.logicalcpu)
         popd
         rm -rf zimg
 
@@ -41,7 +41,7 @@ jobs:
     - name: Install cython
       run: |
         python -m pip install --upgrade pip
-        pip install cython
+        pip install cython==3.0.12 wheel==0.45.1
 
     - name: Set PKG_CONFIG_PATH
       run: echo "PKG_CONFIG_PATH=$pythonLocation/lib/pkgconfig" >> $GITHUB_ENV
@@ -55,7 +55,7 @@ jobs:
 
     - name: make install
       run: |
-        sudo make install -j3
+        sudo make install -j$(sysctl -n hw.logicalcpu)
         pip install .
 
     - name: Run test
