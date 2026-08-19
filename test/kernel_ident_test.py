@@ -64,16 +64,49 @@ def with_cpu(level):
     vs.core.std.SetMaxCPU(level)
 
 
-def gray8(w, h, expr, color=0):
-    blank = vs.core.std.BlankClip(width=w, height=h, format=vs.GRAY8, length=1, color=color)
-    return vs.core.std.Expr(blank, expr) if expr else blank
+def fill_gray(w, h, fmt, fn, color=0):
+    """Classic Expr has no X/Y coordinates; paint pixels with ModifyFrame."""
+    clip = vs.core.std.BlankClip(width=w, height=h, format=fmt, length=1, color=color)
+
+    def sel(n, f):
+        fout = f.copy()
+        arr = fout[0]
+        hh, ww = arr.shape
+        for y in range(hh):
+            for x in range(ww):
+                arr[y, x] = fn(x, y)
+        return fout
+
+    return clip.std.ModifyFrame(clip, sel)
 
 
-def yuv420(w, h, y_expr, u_expr='128', v_expr='128'):
-    y = gray8(w, h, y_expr)
-    u = gray8(w // 2, h // 2, u_expr, color=128)
-    v = gray8(w // 2, h // 2, v_expr, color=128)
+def gray8(w, h, fn, color=0):
+    if fn is None:
+        return vs.core.std.BlankClip(width=w, height=h, format=vs.GRAY8, length=1, color=color)
+    return fill_gray(w, h, vs.GRAY8, fn, color)
+
+
+def yuv420(w, h, yfn, ufn=None, vfn=None):
+    y = gray8(w, h, yfn)
+    u = gray8(w // 2, h // 2, ufn, color=128)
+    v = gray8(w // 2, h // 2, vfn, color=128)
     return vs.core.std.ShufflePlanes([y, u, v], [0, 0, 0], vs.YUV)
+
+
+def const8(v):
+    return lambda x, y, _v=v: _v
+
+
+def ramp_x(scale=1, offset=0, peak=255):
+    return lambda x, y, _s=scale, _o=offset, _p=peak: max(0, min(_p, x * _s + _o))
+
+
+def inv_ramp_x(peak=255):
+    return lambda x, y, _p=peak: max(0, min(_p, _p - x))
+
+
+def checker(a=0, b=255):
+    return lambda x, y, _a=a, _b=b: _a if (x % 2) == 0 else _b
 
 
 def blur_h_int(src, radius, round_val, div):
@@ -166,32 +199,32 @@ class KernelIdentTests(unittest.TestCase):
     def test_merge8_avx2_matches_signed_lerp(self):
         widths = [1, 8, 15, 16, 17, 31, 32, 33, 48, 63, 64, 1920]
         weights = [0.0, 1.0, 0.5, 1.0 / 32768, 32767.0 / 32768] + [random.random() for _ in range(4)]
-        exprs = [
-            ('0', '255'),
-            ('255', '0'),
-            ('X', '255 X -'),
-            ('X 2 % 0 = 0 255 ?', '128'),
-            ('0', '0'),
-            ('255', '255'),
+        pairs = [
+            (const8(0), const8(255), '0/255'),
+            (const8(255), const8(0), '255/0'),
+            (ramp_x(), inv_ramp_x(), 'ramp'),
+            (checker(), const8(128), 'checker'),
+            (const8(0), const8(0), '0/0'),
+            (const8(255), const8(255), '255/255'),
         ]
         with_cpu('avx2')
         for w in widths:
             for we in weights:
                 wu = merge_weight_u(we)
-                for ea, eb in exprs:
-                    a = gray8(w, 3, ea)
-                    b = gray8(w, 3, eb)
+                for fa, fb, name in pairs:
+                    a = gray8(w, 3, fa)
+                    b = gray8(w, 3, fb)
                     out = self.core.std.Merge(a, b, we)
                     got = plane_rows(out.get_frame(0), 0)
                     srca = plane_rows(a.get_frame(0), 0)
                     srcb = plane_rows(b.get_frame(0), 0)
                     exp = [[merge_byte_px(srca[y][x], srcb[y][x], wu) for x in range(w)] for y in range(3)]
-                    self.assertEqual(got, exp, 'w=%d weight=%s expr=%s' % (w, we, (ea, eb)))
+                    self.assertEqual(got, exp, 'w=%d weight=%s %s' % (w, we, name))
 
     def test_merge8_yuv420_chroma_widths(self):
         with_cpu('avx2')
-        clipa = yuv420(17, 8, 'X', 'X', '255 X -')
-        clipb = yuv420(17, 8, '255 X -', '255', '0')
+        clipa = yuv420(17, 8, ramp_x(), ramp_x(), inv_ramp_x())
+        clipb = yuv420(17, 8, inv_ramp_x(), const8(255), const8(0))
         out = self.core.std.Merge(clipa, clipb, 0.5)
         wu = merge_weight_u(0.5)
         fa, fb, fo = clipa.get_frame(0), clipb.get_frame(0), out.get_frame(0)
@@ -202,10 +235,8 @@ class KernelIdentTests(unittest.TestCase):
 
     def test_merge16_none_vs_avx2(self):
         def build():
-            a = self.core.std.BlankClip(width=33, height=4, format=vs.GRAY16, length=1, color=1000)
-            b = self.core.std.BlankClip(width=33, height=4, format=vs.GRAY16, length=1, color=50000)
-            a = self.core.std.Expr(a, 'X 200 *')
-            b = self.core.std.Expr(b, '65535 X 200 * -')
+            a = fill_gray(33, 4, vs.GRAY16, lambda x, y: min(65535, x * 200))
+            b = fill_gray(33, 4, vs.GRAY16, lambda x, y: max(0, 65535 - x * 200))
             return self.core.std.Merge(a, b, 0.37)
         c, a = self._pair(build)
         assert_frames_equal(self, c, a, 'merge16')
@@ -222,22 +253,28 @@ class KernelIdentTests(unittest.TestCase):
 
     def test_maskedmerge8_none_vs_avx2(self):
         widths = [1, 8, 15, 16, 17, 31, 32, 33, 64]
-        masks = ['0', '255', '128', 'X', 'X 2 % 0 = 0 255 ?']
+        masks = [
+            (const8(0), '0'),
+            (const8(255), '255'),
+            (const8(128), '128'),
+            (ramp_x(), 'ramp'),
+            (checker(), 'checker'),
+        ]
         for w in widths:
-            for me in masks:
-                def build(ww=w, mexpr=me):
-                    a = gray8(ww, 4, '0')
-                    b = gray8(ww, 4, '255')
-                    m = gray8(ww, 4, mexpr)
+            for mfn, name in masks:
+                def build(ww=w, fn=mfn):
+                    a = gray8(ww, 4, const8(0))
+                    b = gray8(ww, 4, const8(255))
+                    m = gray8(ww, 4, fn)
                     return self.core.std.MaskedMerge(a, b, m)
                 c, a = self._pair(build)
-                assert_frames_equal(self, c, a, 'mm w=%d mask=%s' % (w, me))
+                assert_frames_equal(self, c, a, 'mm w=%d mask=%s' % (w, name))
 
     def test_maskedmerge8_first_plane_420(self):
         def build():
-            a = yuv420(16, 8, '0', '16', '16')
-            b = yuv420(16, 8, '255', '240', '240')
-            m = yuv420(16, 8, 'X 16 *', '0', '0')
+            a = yuv420(16, 8, const8(0), const8(16), const8(16))
+            b = yuv420(16, 8, const8(255), const8(240), const8(240))
+            m = yuv420(16, 8, lambda x, y: min(255, x * 16), const8(0), const8(0))
             return self.core.std.MaskedMerge(a, b, m, first_plane=True)
         c, a = self._pair(build)
         assert_frames_equal(self, c, a, 'mm first_plane 420')
@@ -245,9 +282,9 @@ class KernelIdentTests(unittest.TestCase):
     def test_maskedmerge8_premul_colorrange(self):
         for limited in (0, 1):
             def build(lim=limited):
-                a = gray8(33, 3, 'X')
-                b = gray8(33, 3, '255 X -')
-                m = gray8(33, 3, '128')
+                a = gray8(33, 3, ramp_x())
+                b = gray8(33, 3, inv_ramp_x())
+                m = gray8(33, 3, const8(128))
                 a = a.std.SetFrameProps(_ColorRange=lim)
                 b = b.std.SetFrameProps(_ColorRange=lim)
                 return self.core.std.MaskedMerge(a, b, m, premultiplied=True)
@@ -281,21 +318,24 @@ class KernelIdentTests(unittest.TestCase):
             (8, 1, 3, 0, 3, 1),   # height==1 vertical via transpose
             (8, 2, 0, 0, 3, 2),
         ]
-        exprs = ['X', '255 X -', 'X 2 % 0 = 0 255 ?']
+        patterns = [
+            (ramp_x(), 'ramp'),
+            (inv_ramp_x(), 'inv'),
+            (checker(), 'checker'),
+        ]
         with_cpu('avx2')
         for w, h, hr, hp, vr, vp in cases:
-            for expr in exprs:
-                src = gray8(w, h, expr)
+            for fn, name in patterns:
+                src = gray8(w, h, fn)
                 out = self.core.std.BoxBlur(src, hradius=hr, hpasses=hp, vradius=vr, vpasses=vp)
                 got = plane_rows(out.get_frame(0), 0)
                 exp = boxblur_ref(plane_rows(src.get_frame(0), 0), hr, hp, vr, vp)
-                self.assertEqual(got, exp, 'boxblur %s expr=%s' % ((w, h, hr, hp, vr, vp), expr))
+                self.assertEqual(got, exp, 'boxblur %s %s' % ((w, h, hr, hp, vr, vp), name))
 
     def test_boxblur_16bit_and_10bit(self):
         with_cpu('avx2')
         for fmt, peak in ((vs.GRAY16, 65535), (vs.GRAY10, 1023)):
-            src = self.core.std.BlankClip(width=17, height=5, format=fmt, length=1, color=0)
-            src = self.core.std.Expr(src, 'X Y + 3 *')
+            src = fill_gray(17, 5, fmt, lambda x, y, p=peak: min(p, (x + y) * 3))
             out = self.core.std.BoxBlur(src, hradius=3, hpasses=2, vradius=2, vpasses=1)
             got = plane_rows(out.get_frame(0), 0)
             exp = boxblur_ref(plane_rows(src.get_frame(0), 0), 3, 2, 2, 1)
@@ -303,7 +343,7 @@ class KernelIdentTests(unittest.TestCase):
 
     def test_boxblur_yuv420_chroma_and_luma_only(self):
         with_cpu('avx2')
-        src = yuv420(16, 8, 'X Y +', 'X', 'Y')
+        src = yuv420(16, 8, lambda x, y: min(255, x + y), ramp_x(), lambda x, y: y)
         out = self.core.std.BoxBlur(src, hradius=2, hpasses=2, vradius=2, vpasses=1)
         fsrc, fout = src.get_frame(0), out.get_frame(0)
         for p in range(3):
@@ -317,8 +357,7 @@ class KernelIdentTests(unittest.TestCase):
 
     def test_boxblur_float_ring(self):
         with_cpu('avx2')
-        src = self.core.std.BlankClip(width=17, height=3, format=vs.GRAYS, length=1, color=0)
-        src = self.core.std.Expr(src, 'X 16 / Y 2 / +')
+        src = fill_gray(17, 3, vs.GRAYS, lambda x, y: x / 16.0 + y / 2.0)
         out = self.core.std.BoxBlur(src, hradius=3, hpasses=2, vradius=0, vpasses=0)
         got = plane_rows_f(out.get_frame(0), 0)
         rows = plane_rows_f(src.get_frame(0), 0)
@@ -332,7 +371,7 @@ class KernelIdentTests(unittest.TestCase):
 
     def test_boxblur_2px_tall_420_vertical(self):
         with_cpu('avx2')
-        src = yuv420(8, 2, 'Y 200 *', '128', '64')
+        src = yuv420(8, 2, lambda x, y: min(255, y * 200), const8(128), const8(64))
         out = self.core.std.BoxBlur(src, hradius=0, hpasses=0, vradius=1, vpasses=2)
         fsrc, fout = src.get_frame(0), out.get_frame(0)
         for p in range(3):
@@ -341,51 +380,58 @@ class KernelIdentTests(unittest.TestCase):
 
     # --- PlaneStats ---
 
-    def _stats_ident(self, fmt, w, h, expr_a, expr_b=None, bits=None):
+    def _stats_ident(self, fmt, w, h, fn_a, fn_b=None, label=''):
         def build():
-            a = self.core.std.BlankClip(width=w, height=h, format=fmt, length=1, color=0)
-            a = self.core.std.Expr(a, expr_a)
-            if expr_b is None:
+            a = fill_gray(w, h, fmt, fn_a)
+            if fn_b is None:
                 return self.core.std.PlaneStats(a)
-            b = self.core.std.BlankClip(width=w, height=h, format=fmt, length=1, color=0)
-            b = self.core.std.Expr(b, expr_b)
+            b = fill_gray(w, h, fmt, fn_b)
             return self.core.std.PlaneStats(a, b)
         c, a = self._pair(build)
         fc, fa = c.get_frame(0), a.get_frame(0)
         for key in ('PlaneStatsMin', 'PlaneStatsMax'):
-            self.assertEqual(fc.props[key], fa.props[key], '%s w=%d h=%d %s' % (key, w, h, expr_a))
+            self.assertEqual(fc.props[key], fa.props[key], '%s w=%d h=%d %s' % (key, w, h, label))
         self.assertAlmostEqual(float(fc.props['PlaneStatsAverage']), float(fa.props['PlaneStatsAverage']),
-                               places=12, msg='Average w=%d %s' % (w, expr_a))
-        if expr_b is not None:
+                               places=12, msg='Average w=%d %s' % (w, label))
+        if fn_b is not None:
             self.assertAlmostEqual(float(fc.props['PlaneStatsDiff']), float(fa.props['PlaneStatsDiff']),
                                    places=12, msg='Diff w=%d' % w)
 
     def test_planestats16_none_vs_avx2(self):
         widths = [1, 8, 15, 16, 17, 31, 32]
-        exprs = ['0', '65535', '32768', 'X', 'X 16 % 0 = 0 65535 ?']
+        patterns = [
+            (lambda x, y: 0, '0'),
+            (lambda x, y: 65535, 'max'),
+            (lambda x, y: 32768, 'mid'),
+            (ramp_x(1, 0, 65535), 'ramp'),
+            (lambda x, y: 0 if (x % 16) == 0 else 65535, 'mod16'),
+        ]
         for w in widths:
-            for e in exprs:
-                self._stats_ident(vs.GRAY16, w, 3, e)
-                self._stats_ident(vs.GRAY16, w, 1, e)
+            for fn, name in patterns:
+                self._stats_ident(vs.GRAY16, w, 3, fn, label=name)
+                self._stats_ident(vs.GRAY16, w, 1, fn, label=name)
 
     def test_planestats16_tail_unique_minmax(self):
         # leftover width%16==1; last pixel is unique min or max
-        self._stats_ident(vs.GRAY16, 17, 2, 'X 16 = 0 40000 ?')
-        self._stats_ident(vs.GRAY16, 17, 2, 'X 16 = 65535 1000 ?')
+        self._stats_ident(vs.GRAY16, 17, 2, lambda x, y: 0 if x == 16 else 40000, label='tail-min')
+        self._stats_ident(vs.GRAY16, 17, 2, lambda x, y: 65535 if x == 16 else 1000, label='tail-max')
 
     def test_planestats16_two_clip(self):
-        self._stats_ident(vs.GRAY16, 17, 3, 'X 100 *', 'X 100 *')
-        self._stats_ident(vs.GRAY16, 17, 3, 'X 100 *', '65535 X 100 * -')
-        self._stats_ident(vs.GRAY16, 17, 2, '1000', 'X 16 = 0 1000 ?')
+        self._stats_ident(vs.GRAY16, 17, 3, lambda x, y: min(65535, x * 100),
+                          lambda x, y: min(65535, x * 100), label='same')
+        self._stats_ident(vs.GRAY16, 17, 3, lambda x, y: min(65535, x * 100),
+                          lambda x, y: max(0, 65535 - x * 100), label='inv')
+        self._stats_ident(vs.GRAY16, 17, 2, lambda x, y: 1000,
+                          lambda x, y: 0 if x == 16 else 1000, label='last0')
 
     def test_planestats_sub16_formats(self):
-        for fmt, expr in ((vs.GRAY10, 'X 4 *'), (vs.GRAY12, 'X 8 *')):
-            self._stats_ident(fmt, 17, 2, expr)
+        self._stats_ident(vs.GRAY10, 17, 2, lambda x, y: min(1023, x * 4), label='p10')
+        self._stats_ident(vs.GRAY12, 17, 2, lambda x, y: min(4095, x * 8), label='p12')
 
     def test_planestats_yuv420_chroma(self):
         def build():
             y = self.core.std.BlankClip(width=16, height=8, format=vs.GRAY16, length=1, color=0)
-            u = self.core.std.Expr(self.core.std.BlankClip(width=8, height=4, format=vs.GRAY16, length=1), 'X 2000 *')
+            u = fill_gray(8, 4, vs.GRAY16, lambda x, y: min(65535, x * 2000))
             v = self.core.std.BlankClip(width=8, height=4, format=vs.GRAY16, length=1, color=32768)
             clip = self.core.std.ShufflePlanes([y, u, v], [0, 0, 0], vs.YUV)
             return self.core.std.PlaneStats(clip, plane=1)
