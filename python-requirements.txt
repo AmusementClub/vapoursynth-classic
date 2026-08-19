@@ -1,4 +1,4 @@
-setuptools
+setuptools==78.1.0
 wheel
 cython
 sphinx

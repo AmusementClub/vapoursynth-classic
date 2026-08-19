@@ -67,7 +67,7 @@ jobs:
       shell: bash
       run: |
         py -3.8-${{ matrix.bits }} -m pip install --upgrade pip
-        py -3.8-${{ matrix.bits }} -m pip install cython==3.0.12 setuptools wheel==0.45.1
+        py -3.8-${{ matrix.bits }} -m pip install cython==3.0.12 "setuptools==74.1.3" wheel==0.45.1
         echo "PYTHON38_DIR=$pythonLocation" >> $GITHUB_ENV
 
     - name: Setup Python 3.9
@@ -80,7 +80,7 @@ jobs:
       shell: bash
       run: |
         py -3.9-${{ matrix.bits }} -m pip install --upgrade pip
-        py -3.9-${{ matrix.bits }} -m pip install cython==3.0.12 setuptools wheel==0.45.1
+        py -3.9-${{ matrix.bits }} -m pip install cython==3.0.12 "setuptools==78.1.0" wheel==0.45.1
         echo "PYTHON39_DIR=$pythonLocation" >> $GITHUB_ENV
 
     - name: Patch Python 3.9 Include Paths
@@ -102,7 +102,7 @@ jobs:
       shell: bash
       run: |
         py -3.10-${{ matrix.bits }} -m pip install --upgrade pip
-        py -3.10-${{ matrix.bits }} -m pip install cython==3.0.12 setuptools wheel==0.45.1
+        py -3.10-${{ matrix.bits }} -m pip install cython==3.0.12 "setuptools==78.1.0" wheel==0.45.1
         echo "PYTHON310_DIR=$pythonLocation" >> $GITHUB_ENV
 
     - name: Setup Python 3.11
@@ -115,7 +115,7 @@ jobs:
       shell: bash
       run: |
         py -3.11-${{ matrix.bits }} -m pip install --upgrade pip
-        py -3.11-${{ matrix.bits }} -m pip install cython==3.0.12 setuptools wheel==0.45.1
+        py -3.11-${{ matrix.bits }} -m pip install cython==3.0.12 "setuptools==78.1.0" wheel==0.45.1
         echo "PYTHON311_DIR=$pythonLocation" >> $GITHUB_ENV
 
     - name: Setup Python 3.12
@@ -149,22 +149,22 @@ jobs:
         msbuild msvc_project/VapourSynth.sln /t:Build /p:Configuration=Release /p:Platform=${{ matrix.platform }}
     - name: Build Python 3.13 plugin
       run: |
-        py -3.13-${{ matrix.bits }} -m pip install . --no-deps -v
+        py -3.13-${{ matrix.bits }} -m pip install . --no-deps --no-build-isolation -v
     - name: Build Python 3.12 plugin
       run: |
-        py -3.12-${{ matrix.bits }} -m pip install . --no-deps -v
+        py -3.12-${{ matrix.bits }} -m pip install . --no-deps --no-build-isolation -v
     - name: Build Python 3.11 plugin
       run: |
-        py -3.11-${{ matrix.bits }} -m pip install . --no-deps -v
+        py -3.11-${{ matrix.bits }} -m pip install . --no-deps --no-build-isolation -v
     - name: Build Python 3.10 plugin
       run: |
-        py -3.10-${{ matrix.bits }} -m pip install . --no-deps -v
+        py -3.10-${{ matrix.bits }} -m pip install . --no-deps --no-build-isolation -v
     - name: Build Python 3.9 plugin
       run: |
-        py -3.9-${{ matrix.bits }} -m pip install . --no-deps -v
+        py -3.9-${{ matrix.bits }} -m pip install . --no-deps --no-build-isolation -v
     - name: Build Python 3.8 plugin
       run: |
-        py -3.8-${{ matrix.bits }} -m pip install . --no-deps -v
+        py -3.8-${{ matrix.bits }} -m pip install . --no-deps --no-build-isolation -v
     - name: Build installer
       run: |
         pushd installer
@@ -177,12 +177,12 @@ jobs:
         } else {
           pushd buildp32
         }
-        py -3.13-${{ matrix.bits }} -m pip install . --no-deps -v
-        py -3.12-${{ matrix.bits }} -m pip install . --no-deps -v
-        py -3.11-${{ matrix.bits }} -m pip install . --no-deps -v
-        py -3.10-${{ matrix.bits }} -m pip install . --no-deps -v
-        py -3.9-${{ matrix.bits }} -m pip install . --no-deps -v
-        py -3.8-${{ matrix.bits }} -m pip install . --no-deps -v
+        py -3.13-${{ matrix.bits }} -m pip install . --no-deps --no-build-isolation -v
+        py -3.12-${{ matrix.bits }} -m pip install . --no-deps --no-build-isolation -v
+        py -3.11-${{ matrix.bits }} -m pip install . --no-deps --no-build-isolation -v
+        py -3.10-${{ matrix.bits }} -m pip install . --no-deps --no-build-isolation -v
+        py -3.9-${{ matrix.bits }} -m pip install . --no-deps --no-build-isolation -v
+        py -3.8-${{ matrix.bits }} -m pip install . --no-deps --no-build-isolation -v
         popd
         popd
 
