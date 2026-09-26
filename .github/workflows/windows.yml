@@ -1,6 +1,13 @@
 name: Windows
 
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'which tag to upload to'
+        default: ''
 
 jobs:
   build-msvc:
@@ -23,7 +30,7 @@ jobs:
             test: true
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Add msbuild to PATH
       uses: microsoft/setup-msbuild@v2
@@ -201,7 +208,7 @@ jobs:
         mv ../*.7z .
         mv installer/buildp$bits upload
     - name: Upload build artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: build-${{matrix.arch}}
         if-no-files-found: error
@@ -268,9 +275,24 @@ jobs:
         done
 
     - name: Upload release artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: release-${{matrix.arch}}
         if-no-files-found: error
         path: |
           upload/
+
+    - name: Compress artifact for release
+      if: github.event_name == 'workflow_dispatch' && github.event.inputs.tag != ''
+      run: |
+        7z a -t7z -mx=9 release-${{matrix.arch}}.7z upload/
+
+    - name: Release
+      uses: softprops/action-gh-release@v1
+      if: github.event_name == 'workflow_dispatch' && github.event.inputs.tag != ''
+      with:
+        tag_name: ${{ github.event.inputs.tag }}
+        files: release-${{matrix.arch}}.7z
+        fail_on_unmatched_files: true
+        generate_release_notes: false
+        prerelease: true
