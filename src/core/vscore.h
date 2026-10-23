@@ -49,10 +49,13 @@
 #ifdef VS_TARGET_OS_WINDOWS
 #    define WIN32_LEAN_AND_MEAN
 #    include <windows.h>
-#    define VS_FRAME_POOL
 #else
 #    include <dlfcn.h>
 #endif
+
+// Frame planes come from MemoryUse's pool on every system: freed blocks are
+// kept for later frames instead of going back to the allocator.
+#define VS_FRAME_POOL
 
 #ifdef VS_FRAME_GUARD
 static const uint32_t VS_FRAME_GUARD_PATTERN = 0xDEADBEEF;
