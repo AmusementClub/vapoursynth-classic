@@ -282,19 +282,82 @@ void MemoryUse::freeLargePage(void *ptr) const {
 #endif
 }
 
+// Blocks from this size on start and end on page boundaries, so that they can
+// be registered with a device API as a whole (VSFrameMemory.h).
+static const size_t pageAlignedBlockSize = 64 * 1024;
+
 void *MemoryUse::allocateMemory(size_t bytes) const {
     void *ptr = allocateLargePage(bytes);
     if (ptr)
         return ptr;
 
-    ptr = vsh_aligned_malloc(VSFrame::alignment + bytes, VSFrame::alignment);
+    size_t total = VSFrame::alignment + bytes;
+    size_t align = VSFrame::alignment;
+    if (bytes >= pageAlignedBlockSize) {
+        align = pageSize();
+        total = (total + align - 1) & ~(align - 1);
+    }
+    ptr = vsh_aligned_malloc(total, align);
     if (!ptr)
         VS_FATAL_ERROR("out of memory");
 
     BlockHeader *header = new (ptr) BlockHeader;
-    header->size = bytes;
+    header->size = total - VSFrame::alignment;
     header->large = false;
     return ptr;
+}
+
+/* static */ size_t MemoryUse::pageSize() {
+    static const size_t size = []() -> size_t {
+#ifdef VS_TARGET_OS_WINDOWS
+        SYSTEM_INFO info;
+        GetSystemInfo(&info);
+        return info.dwPageSize;
+#else
+        long page = sysconf(_SC_PAGESIZE);
+        return page > 0 ? static_cast<size_t>(page) : 4096;
+#endif
+    }();
+    return size;
+}
+
+/* static */ bool MemoryUse::blockOf(const uint8_t *buf, void **base, size_t *size) {
+    const uint8_t *block = buf - VSFrame::alignment;
+    const BlockHeader *header = reinterpret_cast<const BlockHeader *>(block);
+    const size_t total = VSFrame::alignment + header->size;
+    const size_t page = pageSize();
+    if (reinterpret_cast<uintptr_t>(block) % page || total % page)
+        return false;
+    *base = const_cast<uint8_t *>(block);
+    *size = total;
+    return true;
+}
+
+int MemoryUse::addReleaseHook(void (VS_CC *hook)(void *userData, void *base, size_t size), void *userData) {
+    if (!hook)
+        return 0;
+    std::lock_guard<std::mutex> lock(hookMutex);
+    const int id = nextHookId++;
+    releaseHooks.push_back({ id, hook, userData });
+    return id;
+}
+
+void MemoryUse::removeReleaseHook(int id) {
+    std::lock_guard<std::mutex> lock(hookMutex);
+    releaseHooks.erase(std::remove_if(releaseHooks.begin(), releaseHooks.end(), [id](const ReleaseHook &h) { return h.id == id; }), releaseHooks.end());
+}
+
+void MemoryUse::releaseMemory(uint8_t *block) {
+    {
+        std::lock_guard<std::mutex> lock(hookMutex);
+        void *base;
+        size_t size;
+        if (!releaseHooks.empty() && blockOf(block + VSFrame::alignment, &base, &size)) {
+            for (const ReleaseHook &h : releaseHooks)
+                h.hook(h.userData, base, size);
+        }
+    }
+    freeMemory(block);
 }
 
 void MemoryUse::freeMemory(void *ptr) const {
@@ -338,7 +401,10 @@ uint8_t *MemoryUse::allocBuffer(size_t bytes) {
 void MemoryUse::freeBuffer(uint8_t *buf) {
     assert(buf);
 
-    std::lock_guard<std::mutex> lock(mutex);
+    // Blocks leaving the pool are freed after the lock is released: their
+    // release hooks may take plugin locks.
+    std::vector<uint8_t *> evicted;
+    std::unique_lock<std::mutex> lock(mutex);
     buf -= VSFrame::alignment;
 
     const BlockHeader *header = reinterpret_cast<const BlockHeader *>(buf);
@@ -359,9 +425,12 @@ void MemoryUse::freeBuffer(uint8_t *buf) {
         std::advance(iter, randSrc(generator));
         assert(unusedBufferSize >= iter->first);
         unusedBufferSize -= iter->first;
-        freeMemory(iter->second);
+        evicted.push_back(iter->second);
         buffers.erase(iter);
     }
+    lock.unlock();
+    for (uint8_t *block : evicted)
+        releaseMemory(block);
 }
 
 size_t MemoryUse::memoryUse() {
@@ -411,7 +480,7 @@ MemoryUse::MemoryUse() : used(0), freeOnZero(false), largePageEnabled(largePageS
 
 MemoryUse::~MemoryUse() {
     for (auto &iter : buffers)
-        freeMemory(iter.second);
+        releaseMemory(iter.second);
 }
 
 ///////////////
@@ -616,6 +685,12 @@ ptrdiff_t VSFrame::getStride(int plane) const {
     if (plane < 0 || plane >= numPlanes)
         return 0;
     return stride[plane];
+}
+
+bool VSFrame::getPlaneBlock(int plane, void **base, size_t *size) const {
+    if (contentType != mtVideo || plane < 0 || plane >= numPlanes || !data[plane])
+        return false;
+    return MemoryUse::blockOf(data[plane]->data, base, size);
 }
 
 const uint8_t *VSFrame::getReadPtr(int plane) const {

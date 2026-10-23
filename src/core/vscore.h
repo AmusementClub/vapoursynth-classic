@@ -401,6 +401,18 @@ private:
     std::minstd_rand generator;
     std::mutex mutex;
 
+    // VSFrameMemory.h release hooks; hookMutex is held while one runs.
+    struct ReleaseHook {
+        int id;
+        void (VS_CC *hook)(void *userData, void *base, size_t size);
+        void *userData;
+    };
+    std::vector<ReleaseHook> releaseHooks;
+    int nextHookId = 1;
+    std::mutex hookMutex;
+    // Calls the release hooks for the block, then frees it.
+    void releaseMemory(uint8_t *block);
+
     static bool largePageSupported();
     static size_t largePageSize();
 
@@ -415,6 +427,11 @@ public:
     void subtract(size_t bytes);
     uint8_t *allocBuffer(size_t bytes);
     void freeBuffer(uint8_t *buf);
+    // The block holding allocBuffer()'s buf, when it is page aligned (VSFrameMemory.h).
+    static bool blockOf(const uint8_t *buf, void **base, size_t *size);
+    static size_t pageSize();
+    int addReleaseHook(void (VS_CC *hook)(void *userData, void *base, size_t size), void *userData);
+    void removeReleaseHook(int id);
     size_t memoryUse();
     size_t getLimit();
     int64_t setMaxMemoryUse(int64_t bytes);
@@ -521,6 +538,8 @@ public:
         return width;
     }
     ptrdiff_t getStride(int plane) const;
+    // The page-aligned pool block holding a video plane (VSFrameMemory.h).
+    bool getPlaneBlock(int plane, void **base, size_t *size) const;
     const uint8_t *getReadPtr(int plane) const;
     uint8_t *getWritePtr(int plane);
 
