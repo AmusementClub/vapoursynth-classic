@@ -23,6 +23,7 @@
 #include "vslog.h"
 #include "VSHelper4.h"
 #include "VapourSynthC.h"
+#include "VSFrameMemory.h"
 #include <cassert>
 #include <cstring>
 #include <string>
@@ -1381,4 +1382,39 @@ const VSAPI *VS_CC getVapourSynthAPI(int version) VS_NOEXCEPT {
     } else {
         return nullptr;
     }
+}
+
+///////////////////////////////
+// VSFrameMemory.h
+
+static int VS_CC getPlaneBlock(const VSFrame *f, int plane, void **base, size_t *size) VS_NOEXCEPT {
+    assert(f && base && size);
+    void *b;
+    size_t s;
+    if (!f->getPlaneBlock(plane, &b, &s))
+        return 0;
+    *base = b;
+    *size = s;
+    return 1;
+}
+
+static int VS_CC addReleaseHook(VSCore *core, VSFrameMemoryReleaseHook hook, void *userData) VS_NOEXCEPT {
+    assert(core);
+    return core->memory->addReleaseHook(hook, userData);
+}
+
+static void VS_CC removeReleaseHook(VSCore *core, int id) VS_NOEXCEPT {
+    assert(core);
+    core->memory->removeReleaseHook(id);
+}
+
+const VSFrameMemoryAPI *VS_CC getVSFrameMemoryAPI(int version) VS_NOEXCEPT {
+    static const VSFrameMemoryAPI api = {
+        VS_FRAME_MEMORY_API_VERSION,
+        MemoryUse::pageSize(),
+        &getPlaneBlock,
+        &addReleaseHook,
+        &removeReleaseHook
+    };
+    return version >= 1 && version <= VS_FRAME_MEMORY_API_VERSION ? &api : nullptr;
 }
