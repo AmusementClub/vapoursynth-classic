@@ -25,6 +25,7 @@
 #ifndef VS_TARGET_OS_WINDOWS
 #include <dirent.h>
 #include <cstddef>
+#include <exception>
 #include <unistd.h>
 #include "settings.h"
 #endif

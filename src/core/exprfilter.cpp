@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <exception>
 #include <limits>
 #include <memory>
 #include <stdexcept>

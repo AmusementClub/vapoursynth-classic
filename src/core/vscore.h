@@ -28,6 +28,7 @@
 #include <cstddef>
 #include <cstdlib>
 #include <stdexcept>
+#include <exception>
 #include <string>
 #include <cstring>
 #include <cassert>
