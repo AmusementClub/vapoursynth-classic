@@ -25,6 +25,7 @@
 #include "VapourSynth3.h"
 #include "vslog.h"
 #include "intrusive_ptr.h"
+#include <cstddef>
 #include <cstdlib>
 #include <stdexcept>
 #include <string>
@@ -554,7 +555,7 @@ template<typename T, size_t staticSize>
 class SemiStaticVector {
 private:
     size_t numElems = 0;
-    typename std::aligned_storage<sizeof(T), alignof(T)>::type staticData[staticSize];
+    alignas(T) std::byte staticData[staticSize][sizeof(T)];
     std::vector<T> dynamicData;
     void freeStatic() noexcept {
         for (size_t pos = 0; pos < std::min(numElems, staticSize); ++pos)
