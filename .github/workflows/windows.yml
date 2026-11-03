@@ -285,7 +285,8 @@ jobs:
     - name: Compress artifact for release
       if: github.event_name == 'workflow_dispatch' && github.event.inputs.tag != ''
       run: |
-        7z a -t7z -mx=9 release-${{matrix.arch}}.7z upload/
+        cd upload
+        7z a -t7z -mx=9 ../release-${{matrix.arch}}.7z .
 
     - name: Release
       uses: softprops/action-gh-release@v1
