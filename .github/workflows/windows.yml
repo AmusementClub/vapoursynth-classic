@@ -283,9 +283,11 @@ jobs:
           upload/
 
     - name: Compress artifact for release
+      shell: bash
       if: github.event_name == 'workflow_dispatch' && github.event.inputs.tag != ''
       run: |
         cd upload
+        rm -rf build/
         7z a -t7z -mx=9 ../release-${{matrix.arch}}.7z .
 
     - name: Release
